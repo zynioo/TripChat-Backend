@@ -1,0 +1,24 @@
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+    "name": "Marek",
+    "lastName": "Kowalski",
+    "username": "marek.kowalski",
+    "dateOfBirth": "1990-01-01",
+    "email": "marekowalski@gmail.com",
+    "password": "marek123"
+}
+
+###
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+    "email": "marekowalski@gmail.com",
+    "password": "marek123"
+}
+
+###
+POST http://localhost:5000/api/auth/logout
+
