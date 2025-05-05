@@ -133,12 +133,13 @@ const logout = (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { name, lastName, username, dateOfBirth, profilePicture } = req.body;
-
+    const { name, lastName, username, dateOfBirth, bio, profilePicture } =
+      req.body;
     const userId = req.user._id;
 
-    if (!name || !lastName || !username || !dateOfBirth || !profilePicture) {
-      return res.status(400).json({ message: "Uzupełnij dane" });
+    // Validate required fields
+    if (!name || !lastName || !username || !dateOfBirth) {
+      return res.status(400).json({ message: "Uzupełnij podstawowe dane" });
     }
 
     if (username.length < 3) {
@@ -147,35 +148,159 @@ const updateProfile = async (req, res) => {
       });
     }
 
-    if (!name.trim()) {
-      return res.status(400).json({ message: "Imię nie może być puste" });
+    // Check if username is taken (excluding current user)
+    const existingUser = await User.findOne({
+      username,
+      _id: { $ne: userId },
+    });
+
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ message: "Nazwa użytkownika jest już zajęta" });
     }
 
-    if (!lastName.trim()) {
-      return res.status(400).json({ message: "Nazwisko nie może być puste" });
+    // Prepare update data
+    let updateData = {
+      name,
+      lastName,
+      username,
+      dateOfBirth,
+      bio: bio || "",
+    };
+
+    // Handle profile picture if provided and different from current one
+    if (
+      profilePicture &&
+      typeof profilePicture === "string" &&
+      profilePicture.startsWith("data:")
+    ) {
+      try {
+        console.log("Processing profile picture");
+        const uploadResult = await cloudinary.uploader.upload(profilePicture, {
+          folder: "tripchat_users",
+          resource_type: "image",
+          format: "jpg",
+          transformation: [
+            { width: 400, height: 400, crop: "limit" },
+            { quality: "auto:good" },
+          ],
+        });
+
+        updateData.profilePicture = uploadResult.secure_url;
+        console.log("Profile picture uploaded successfully");
+      } catch (error) {
+        console.error("Failed to upload profile picture:", error);
+        // Continue without updating the picture
+      }
     }
 
-    const image = req.user.profilePicture;
-    if (profilePicture !== req.user.profilePicture) {
-      image = await cloudinary.uploader.upload(profilePicture);
-    }
+    // Update user in database
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    }).select("-password -__v");
 
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      {
-        name,
-        lastName,
-        username,
-        dateOfBirth,
-        profilePicture: image.secure_url,
-      },
-      { new: true }
-    );
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     res.status(200).json(updatedUser);
   } catch (error) {
-    console.error(error);
+    console.error("Error updating profile:", error);
     res.status(500).json({ message: "Wystąpił błąd serwera" });
+  }
+};
+
+const updateUser = async (req, res) => {
+  try {
+    const { name, lastName, username, dateOfBirth, bio, profilePicture } =
+      req.body;
+    const userId = req.user._id;
+
+    console.log("Update request received for user:", userId);
+
+    // Validate inputs
+    if (!name || !lastName || !username) {
+      return res
+        .status(400)
+        .json({ message: "Name, last name, and username are required" });
+    }
+
+    // Check if username already exists (but exclude current user)
+    const existingUser = await User.findOne({
+      username,
+      _id: { $ne: userId },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: "Username already taken" });
+    }
+
+    // Use let instead of const for updateData since we might modify it later
+    let updateData = {
+      name,
+      lastName,
+      username,
+      dateOfBirth,
+      bio: bio || "",
+    };
+
+    // Handle profile picture if provided
+    if (
+      profilePicture &&
+      typeof profilePicture === "string" &&
+      profilePicture.startsWith("data:")
+    ) {
+      try {
+        // Insert a delay to prevent rate limiting issues
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        console.log("Processing profile picture");
+
+        // Try to extract just the base64 part if it's a data URL
+        const base64Data = profilePicture.split(",")[1];
+
+        if (!base64Data) {
+          console.error("Invalid image format");
+          return res.status(400).json({ message: "Invalid image format" });
+        }
+
+        // Upload with fixed format to avoid issues
+        const uploadResult = await cloudinary.uploader.upload(profilePicture, {
+          folder: "tripchat_users",
+          resource_type: "image",
+          format: "jpg",
+          transformation: [
+            { width: 400, height: 400, crop: "limit" },
+            { quality: "auto:good" },
+          ],
+        });
+
+        updateData.profilePicture = uploadResult.secure_url;
+        console.log("Image uploaded successfully");
+      } catch (cloudinaryError) {
+        console.error("Cloudinary upload error:", cloudinaryError);
+
+        // Continue with update without changing the profile picture
+        console.log("Continuing update without profile picture change");
+        // Do not return error response here - continue with the update
+      }
+    }
+
+    // Update the user data
+    console.log("Updating user with data:", JSON.stringify(updateData));
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    }).select("-password -__v");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(updatedUser);
+  } catch (error) {
+    console.error("Error in updateUser:", error.message);
+    res.status(500).json({ message: "Server error", details: error.message });
   }
 };
 
@@ -188,4 +313,4 @@ const checkAuth = (req, res) => {
   }
 };
 
-export { register, login, logout, updateProfile, checkAuth };
+export { register, login, logout, updateProfile, checkAuth, updateUser };

@@ -3,30 +3,22 @@ import mongoose from "mongoose";
 const messageSchema = new mongoose.Schema(
   {
     senderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      type: String,
       required: true,
     },
     receiverId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      type: String,
       required: true,
     },
     text: {
       type: String,
+      default: "",
     },
     image: {
       type: String,
+      default: "",
     },
-    isRead: {
-      type: Boolean,
-      default: false,
-    },
-    isDeleted: {
-      type: Boolean,
-      default: false,
-    },
-    isEdited: {
+    read: {
       type: Boolean,
       default: false,
     },
@@ -34,4 +26,6 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Message", messageSchema);
+const Message = mongoose.model("Message", messageSchema);
+
+export default Message;
